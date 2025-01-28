@@ -111,6 +111,32 @@
             font-size: 14px;
             text-align: center;
         }
+
+        #pause-menu {
+            position: fixed;           /* Se superpone encima del juego */
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: none;            /* Oculto por defecto */
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 9999;            /* Para quedar por encima de todo */
+            flex-direction: column;
+        }
+
+        #pause-menu h1 {
+            font-size: 3em;
+            margin: 0 0 20px 0;
+        }
+
+        #pause-menu p {
+            font-size: 1.2em;
+            margin: 0;
+        }
+
     </style>
 </head>
 <body>
@@ -155,6 +181,8 @@
         let isAnimating = false;
         let canHold = true;
         let heldPiece = null;
+        let isPaused = false;
+
 
         const gameBoard = document.getElementById('game-board');
         const scoreElement = document.getElementById('score');
@@ -170,6 +198,16 @@
             '#f00000', // Z
             '#f0a000', // L
             '#0000f0'  // J
+        ];
+
+        const ghostColors = [
+            'rgba(0, 240, 240, 0.4)',  // I
+            'rgba(240, 240, 0, 0.4)',  // O
+            'rgba(160, 0, 240, 0.4)',  // T
+            'rgba(0, 240, 0, 0.4)',    // S
+            'rgba(240, 0, 0, 0.4)',    // Z
+            'rgba(240, 160, 0, 0.4)',  // L
+            'rgba(0, 0, 240, 0.4)'     // J
         ];
 
         const tetrominoes = [
@@ -240,6 +278,32 @@
                     }
                 });
             });
+        }
+
+        function drawGhost() {
+            const originalY = currentPosition.y;
+            while (true) {
+                currentPosition.y++;
+                if (checkCollision()) {
+                    currentPosition.y--;
+                    break;
+                }
+            }
+            currentPiece.shape.forEach((row, rowIndex) => {
+                row.forEach((value, colIndex) => {
+                    if (value) {
+                        const y = currentPosition.y + rowIndex;
+                        const x = currentPosition.x + colIndex;
+                        if (y >= 0 && x >= 0 && x < boardWidth) {
+                            const cell = document.getElementById(`${y}-${x}`);
+                            if (cell) {
+                                cell.style.backgroundColor = ghostColors[currentPiece.color];
+                            }
+                        }
+                    }
+                });
+            });
+            currentPosition.y = originalY;
         }
 
         async function checkLines() {
@@ -359,18 +423,34 @@
         function hardDrop() {
             if (isAnimating) return;
 
-            let y = currentPosition.y;
+            clearPiece();
             while (true) {
                 currentPosition.y++;
                 if (checkCollision()) {
                     currentPosition.y--;
                     break;
                 }
-                y++;
             }
 
-            mergePiece();
-        }
+    mergePiece();
+    newPiece();
+
+    if (checkCollision()) {
+        alert(`Game Over! Puntuación: ${score}`);
+        board.forEach(row => row.fill(0));
+        score = 0;
+        scoreElement.textContent = `Puntuación: ${score}`;
+        level = 1;
+        levelElement.textContent = `Nivel: ${level}`;
+        linesClearedTotal = 0;
+        linesElement.textContent = `Líneas: ${linesClearedTotal}`;
+        dropInterval = baseDropInterval;
+    }
+
+    drawBoard();
+    drawPiece();
+}
+
 
         function holdCurrentPiece() {
             if (!canHold) return;
@@ -409,8 +489,29 @@
                 });
             }
         }
+        
+        function togglePause() {
+            isPaused = !isPaused;
+            const pauseMenu = document.getElementById('pause-menu');
+            
+            if (isPaused) {
+                pauseMenu.style.display = 'flex'; 
+            } else {
+                pauseMenu.style.display = 'none'; 
+                lastTime = performance.now();
+            }
+}
 
         document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                togglePause();
+                return; 
+            }    
+            if (isPaused) return;
+
+            if (!currentPiece || isAnimating) return;
+
+
             if (!currentPiece || isAnimating) return;
 
             clearPiece();
@@ -451,15 +552,23 @@
 
         function gameLoop(timestamp) {
             if (!lastTime) lastTime = timestamp;
-            const deltaTime = timestamp - lastTime;
-
-            if (deltaTime > dropInterval && !isAnimating) {
-                moveDown();
-                lastTime = timestamp;
+            
+            // Si NO está pausado, hacemos el control normal del juego
+            if (!isPaused) {
+                const deltaTime = timestamp - lastTime;
+                if (deltaTime > dropInterval && !isAnimating) {
+                    moveDown();
+                    lastTime = timestamp;
+                }
+                
+                drawBoard();
+                drawGhost();
+                drawPiece();
             }
 
             requestAnimationFrame(gameLoop);
         }
+
 
         createBoard();
         newPiece();
@@ -467,5 +576,10 @@
         drawPiece();
         requestAnimationFrame(gameLoop);
     </script>
+    <div id="pause-menu">
+        <h1>PAUSA</h1>
+        <p>Pulsa ESC para continuar</p>
+    </div>
+    
 </body>
 </html>
